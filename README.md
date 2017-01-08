@@ -8,7 +8,8 @@
 ## Input:
 *  QCA6290_SCAQBAFM_rampatch.elf
 	* btfm_proc\bt\wcss\bsp\rom\build\SCAQBAF\rampatch
-*  env_cmd
+*  env_cmd(cmdenv)
+	* btfm_proc\bt\wcss\bsp\rom\build
 *  test_key(modulus, exponent)
 	* btfm_proc\bt\wcss\bsp\rom\build
 *  test_prv_key.pem(binary to sign hash)
