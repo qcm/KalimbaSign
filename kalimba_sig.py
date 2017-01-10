@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import os
 import binascii
+import struct
 from Crypto.Signature import PKCS1_PSS
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
@@ -87,17 +88,25 @@ def getRSAData(fname):
         it = iter(tlist)
         # compose RSA in 32-bit little-endian
         for x in it: 
-                tmp = binascii.a2b_hex(x) + binascii.a2b_hex(next(it)) + binascii.a2b_hex(next(it)) + binascii.a2b_hex(next(it))
+		try:
+                	tmp = binascii.a2b_hex(x) + binascii.a2b_hex(next(it)) + binascii.a2b_hex(next(it)) + binascii.a2b_hex(next(it))
+		except TypeError:
+			print "Key file might be copied across platform. Please do CR-LF transition accordingly."
+			exit()
                 rsa_bin = tmp + rsa_bin
     
         return rsa_bin + binascii.a2b_hex(exponent)
 
 def main():
-	global PATCH_LEN
+	global PATCH_LEN, PUB_KEY
 	try:
-		with open(BIN_FIN, "r+b") as fin:
+		with open(BIN_FIN, "r+b") as fin, open("test", "w+b") as fout:
 			rampatch = fin.read()
 			PATCH_LEN = len(rampatch)
+			PUB_KEY = getRSAData(KEY_FILE)
+			# contruct header #
+			fout_buf = struct.pack("B", TLV_TYPE)
+			fout.write(fout_buf)
 			#print 'os bin size %d' %(BIN_SIZE)
 			#print 'content size %d' %(len(content))
 			#print binascii.hexlify(content[0])
