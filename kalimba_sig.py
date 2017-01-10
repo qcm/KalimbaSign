@@ -32,12 +32,13 @@ TLV_TYPE = 1 # rampatch: 0x01; btnvm: 0x02; fmnvm: 0x03; btfmnvm: 0x04
 TLV_LEN = 0 # 3-bytes
 TOTAL_LEN = 0 # tlv header + patch size
 PATCH_LEN = 0
-SIGN_FMT_VER = 0 #?
-SIGN_ALGO = 0 #?
+SIGN_FMT_VER = 1 #?
+SIGN_ALGO = 2 #? 0:SHA256; 1:ECDSA_P-256; 2:RSA-2048_SHA256 3~255: Reserved
 TLV_RSP_CFG_ACK_CC_ACK_VSE = 0 
 TLV_RSP_CFG_ACK_CC_NO_VSE  = 1 
 TLV_RSP_CFG_NO_CC_ACK_VSE  = 2 
 TLV_RSP_CFG_NO_CC_NO_VSE   = 3 
+IMG_TYPE = int(os.environ['IMAGE_TYPE'], 10)
 PRODUCT_ID = 0 #?
 PATCH_VER = 0 #?
 RSV_BYTES_0 = 0
@@ -123,6 +124,11 @@ def main():
 			fout_buf += struct.pack('B', ((PATCH_LEN >> 8) % 256)) # byte9
 			fout_buf += struct.pack('B', ((PATCH_LEN >> 16) % 256)) # byte10
 			fout_buf += struct.pack('B', ((PATCH_LEN >> 24) % 256)) # byte11
+
+			fout_buf += struct.pack('B', ((SIGN_FMT_VER) % 256)) # byte12
+			fout_buf += struct.pack('B', ((SIGN_ALGO) % 256)) # byte13
+			fout_buf += struct.pack('B', ((TLV_RSP_CFG_ACK_CC_ACK_VSE) % 256)) # byte14
+			fout_buf += struct.pack('B', ((IMG_TYPE) % 256)) # byte15
 			fout.write(fout_buf)
 			#print 'os bin size %d' %(BIN_SIZE)
 			#print 'content size %d' %(len(content))
