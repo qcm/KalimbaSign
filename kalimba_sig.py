@@ -29,8 +29,8 @@ from Crypto.PublicKey import RSA
 ### Global Variables ###
 # MACROS for TLV RSP Config; If BIT0 set NO ACK for VSE; If BIT1 set NO ACK for CC 
 TLV_TYPE = 1 # rampatch: 0x01; btnvm: 0x02; fmnvm: 0x03; btfmnvm: 0x04
-TLV_LEN = 0
-TOTAL_LEN = 0
+TLV_LEN = 0 # 3-bytes
+TOTAL_LEN = 0 # tlv header + patch size
 PATCH_LEN = 0
 SIGN_FMT_VER = 0 #?
 SIGN_ALGO = 0 #?
@@ -43,8 +43,10 @@ PATCH_VER = 0 #?
 RSV_BYTES_0 = 0
 RSV_BYTES_1 = 0
 ENTRY_ADDR = b'\x98' + b'\x33' + b'\x02' + b'\x00'
-SIGNATURE = ''
+TLV_HEADER = 36 # 36 bytes header. Please refer the doc
+SIGNATURE = b'\x00'* 256 # 256 bytes for RSA-2048
 PUB_KEY = ''
+X_ITEM = b'\x72' + b'\x92' + b'\xa6' + b'\x0b' #? what's this
 
 ### FILES ###
 BIN_FIN = "FILES/QCA6290_SCAQBAFM_rampatch.bin"
@@ -98,14 +100,29 @@ def getRSAData(fname):
         return rsa_bin + binascii.a2b_hex(exponent)
 
 def main():
-	global PATCH_LEN, PUB_KEY
+	global TLV_LEN, TOTAL_LEN, PATCH_LEN, PUB_KEY
 	try:
 		with open(BIN_FIN, "r+b") as fin, open("test", "w+b") as fout:
 			rampatch = fin.read()
-			PATCH_LEN = len(rampatch)
+			PATCH_LEN = len(rampatch) + len(X_ITEM)
 			PUB_KEY = getRSAData(KEY_FILE)
 			# contruct header #
-			fout_buf = struct.pack("B", TLV_TYPE)
+			fout_buf = struct.pack("B", TLV_TYPE) # byte0
+			TLV_LEN = TLV_HEADER + PATCH_LEN + len(SIGNATURE) + len(PUB_KEY)
+			fout_buf += struct.pack('B', (TLV_LEN % 256)) # byte1
+			fout_buf += struct.pack('B', ((TLV_LEN >> 8) % 256)) # byte2
+			fout_buf += struct.pack('B', ((TLV_LEN >> 16) % 256)) # byte3
+			
+			TOTAL_LEN = TLV_HEADER + PATCH_LEN
+			fout_buf += struct.pack('B', ((TOTAL_LEN) % 256)) # byte4
+			fout_buf += struct.pack('B', ((TOTAL_LEN >> 8) % 256)) # byte5
+			fout_buf += struct.pack('B', ((TOTAL_LEN >> 16) % 256)) # byte6
+			fout_buf += struct.pack('B', ((TOTAL_LEN >> 24) % 256)) # byte7
+			
+			fout_buf += struct.pack('B', ((PATCH_LEN) % 256)) # byte8
+			fout_buf += struct.pack('B', ((PATCH_LEN >> 8) % 256)) # byte9
+			fout_buf += struct.pack('B', ((PATCH_LEN >> 16) % 256)) # byte10
+			fout_buf += struct.pack('B', ((PATCH_LEN >> 24) % 256)) # byte11
 			fout.write(fout_buf)
 			#print 'os bin size %d' %(BIN_SIZE)
 			#print 'content size %d' %(len(content))
