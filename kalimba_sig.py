@@ -39,20 +39,25 @@ TLV_RSP_CFG_ACK_CC_NO_VSE  = 1
 TLV_RSP_CFG_NO_CC_ACK_VSE  = 2 
 TLV_RSP_CFG_NO_CC_NO_VSE   = 3 
 IMG_TYPE = int(os.environ['IMAGE_TYPE'], 10)
-PRODUCT_ID = 0 #?
-PATCH_VER = 0 #?
-RSV_BYTES_0 = 0
-RSV_BYTES_1 = 0
+PRODUCT_ID = b'\x0d' + b'\x00' #?
+ROM_BUILD_VER = int(os.environ['BUILD_VER'], 10) #? from where? and order?
+PATCH_VER = b'\x02' + b'\x00'  #?
+RSV_BYTES_0 = b'\x00' + b'\x00'
+ANT_RB_VER = os.environ['ANTIROLLBACK_VERSION'].lstrip('0x').zfill(2)
+SERIAL_LOW = os.environ['SERIAL_NO_LOW'].lstrip('0x').zfill(8)
+SERIAL_HIGH = os.environ['SERIAL_NO_HIGH'].lstrip('0x').zfill(4)
+RSV_BYTES_1 = b'\x00' + b'\x00'
 ENTRY_ADDR = b'\x98' + b'\x33' + b'\x02' + b'\x00'
 TLV_HEADER = 36 # 36 bytes header. Please refer the doc
+CRC32 = b'\x00' * 4
 SIGNATURE = b'\x00'* 256 # 256 bytes for RSA-2048
 PUB_KEY = ''
-X_ITEM = b'\x72' + b'\x92' + b'\xa6' + b'\x0b' #? what's this
 
 ### FILES ###
 BIN_FIN = "FILES/QCA6290_SCAQBAFM_rampatch.bin"
 BIN_SIZE = 0
-KEY_FILE = "FILES/test_key.txt"
+PUB_KEY_FILE = "FILES/test_key.txt"
+PRI_KEY_FILE = "FILES/test_prv_key.pem"
 DFU_FOUT = "FILES/QCA6290_SCAQBAFM_rampatch.dfu"
 
 
@@ -100,13 +105,27 @@ def getRSAData(fname):
     
         return rsa_bin + binascii.a2b_hex(exponent)
 
+def getCRC(bstring):
+	crc32 = (~binascii.crc32(bstring)) & 0xFFFFFFFF
+	return struct.pack('I', crc32)
+
+def getSignature(bstring):
+	privateKey = RSA.importKey(open(PRI_KEY_FILE).read())
+        hash = SHA256.new()
+        hash.update(bstring)
+        print(hash.hexdigest())
+        signer = PKCS1_PSS.new(privateKey)
+        signature = signer.sign(hash)
+	return signature
+
 def main():
-	global TLV_LEN, TOTAL_LEN, PATCH_LEN, PUB_KEY
+	global TLV_LEN, TOTAL_LEN, PATCH_LEN, PUB_KEY, CRC32
 	try:
-		with open(BIN_FIN, "r+b") as fin, open("test", "w+b") as fout:
+		with open(BIN_FIN, "r+b") as fin, open("test2", "w+b") as fout:
 			rampatch = fin.read()
-			PATCH_LEN = len(rampatch) + len(X_ITEM)
-			PUB_KEY = getRSAData(KEY_FILE)
+			CRC32 = getCRC(rampatch)
+			PATCH_LEN = len(rampatch) + len(CRC32)
+			PUB_KEY = getRSAData(PUB_KEY_FILE)
 			# contruct header #
 			fout_buf = struct.pack("B", TLV_TYPE) # byte0
 			TLV_LEN = TLV_HEADER + PATCH_LEN + len(SIGNATURE) + len(PUB_KEY)
@@ -129,6 +148,27 @@ def main():
 			fout_buf += struct.pack('B', ((SIGN_ALGO) % 256)) # byte13
 			fout_buf += struct.pack('B', ((TLV_RSP_CFG_ACK_CC_ACK_VSE) % 256)) # byte14
 			fout_buf += struct.pack('B', ((IMG_TYPE) % 256)) # byte15
+
+			fout_buf += PRODUCT_ID # byte16, 17
+			fout_buf += struct.pack('B', ((ROM_BUILD_VER >> 8) % 256)) # byte18
+			fout_buf += struct.pack('B', ((ROM_BUILD_VER) % 256)) # byte19
+			
+			fout_buf += PATCH_VER # byte20, 21
+			fout_buf += RSV_BYTES_0 # byte22, 23
+
+			fout_buf += binascii.a2b_hex(ANT_RB_VER) # byte24-27
+			fout_buf += binascii.a2b_hex(SERIAL_LOW) # byte28-31
+			fout_buf += binascii.a2b_hex(SERIAL_HIGH) # byte32, 33
+
+			fout_buf += RSV_BYTES_1 # byte34, 35
+			fout_buf += ENTRY_ADDR
+			# header finished #
+
+			fout_buf += rampatch
+			fout_buf += CRC32
+			fout_buf += getSignature(rampatch)
+			fout_buf += PUB_KEY
+
 			fout.write(fout_buf)
 			#print 'os bin size %d' %(BIN_SIZE)
 			#print 'content size %d' %(len(content))
