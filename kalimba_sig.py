@@ -119,11 +119,12 @@ def getSignature(bstring):
 	return signature
 
 def main():
-	global TLV_LEN, TOTAL_LEN, PATCH_LEN, PUB_KEY, CRC32
+	global TLV_LEN, TOTAL_LEN, PATCH_LEN, PUB_KEY, CRC32, SIGNATURE
 	try:
-		with open(BIN_FIN, "r+b") as fin, open("test2", "w+b") as fout:
+		with open(BIN_FIN, "r+b") as fin, open("test3", "w+b") as fout:
 			rampatch = fin.read()
 			CRC32 = getCRC(rampatch)
+			SIGNATURE = getSignature(rampatch)
 			PATCH_LEN = len(rampatch) + len(CRC32)
 			PUB_KEY = getRSAData(PUB_KEY_FILE)
 			# contruct header #
@@ -166,7 +167,7 @@ def main():
 
 			fout_buf += rampatch
 			fout_buf += CRC32
-			fout_buf += getSignature(rampatch)
+			fout_buf += SIGNATURE
 			fout_buf += PUB_KEY
 
 			fout.write(fout_buf)
