@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import os
+import sys
 import binascii
 import struct
 from Crypto.Signature import PKCS1_PSS
@@ -61,9 +62,9 @@ PRI_KEY_FILE = "FILES/test_prv_key.pem"
 DFU_FOUT = "FILES/QCA6290_SCAQBAFM_rampatch.dfu"
 
 
-print "*" * 24
-print "\tStart"
-print "*" * 24
+def optParser():
+	pass
+
 
 def getRSAData(fname):
         rsa_bin = ''
@@ -178,5 +179,8 @@ def main():
 		print BIN_FIN + " not exist"
 		exit()
 
+print "*" * 24
+print "\tStart"
+print "*" * 24
 main()
 		
