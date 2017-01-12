@@ -26,6 +26,9 @@ from Crypto.PublicKey import RSA
 #SERIAL_NO_HIGH=0x0
 #DEBUG_OPTIONS=0x0
 
+### Python ###
+# higher than this support argparse
+PYTHON_VERSION = 0x02070000
 
 ### Global Variables ###
 # MACROS for TLV RSP Config; If BIT0 set NO ACK for VSE; If BIT1 set NO ACK for CC 
@@ -33,20 +36,25 @@ TLV_TYPE = 1 # rampatch: 0x01; btnvm: 0x02; fmnvm: 0x03; btfmnvm: 0x04
 TLV_LEN = 0 # 3-bytes
 TOTAL_LEN = 0 # tlv header + patch size
 PATCH_LEN = 0
-SIGN_FMT_VER = 1 #?
+SIGN_FMT_VER = 1 
 SIGN_ALGO = 2 #? 0:SHA256; 1:ECDSA_P-256; 2:RSA-2048_SHA256 3~255: Reserved
 TLV_RSP_CFG_ACK_CC_ACK_VSE = 0 
 TLV_RSP_CFG_ACK_CC_NO_VSE  = 1 
 TLV_RSP_CFG_NO_CC_ACK_VSE  = 2 
 TLV_RSP_CFG_NO_CC_NO_VSE   = 3 
-IMG_TYPE = int(os.environ['IMAGE_TYPE'], 10)
+#IMG_TYPE = int(os.environ['IMAGE_TYPE'], 10)
+IMG_TYPE = 0 # read input from optParser
 PRODUCT_ID = b'\x0d' + b'\x00' #?
-ROM_BUILD_VER = int(os.environ['BUILD_VER'], 10) #? from where? and order?
+#ROM_BUILD_VER = int(os.environ['BUILD_VER'], 10) #? from where? and order?
+ROM_BUILD_VER = 0 # read input from optParser
 PATCH_VER = b'\x02' + b'\x00'  #?
 RSV_BYTES_0 = b'\x00' + b'\x00'
-ANT_RB_VER = os.environ['ANTIROLLBACK_VERSION'].lstrip('0x').zfill(2)
-SERIAL_LOW = os.environ['SERIAL_NO_LOW'].lstrip('0x').zfill(8)
-SERIAL_HIGH = os.environ['SERIAL_NO_HIGH'].lstrip('0x').zfill(4)
+#ANT_RB_VER = os.environ['ANTIROLLBACK_VERSION'].lstrip('0x').zfill(2)
+ANT_RB_VER = 0 # read input from optParser
+#SERIAL_LOW = os.environ['SERIAL_NO_LOW'].lstrip('0x').zfill(8)
+SERIAL_LOW = 0 # read input from optParser
+#SERIAL_HIGH = os.environ['SERIAL_NO_HIGH'].lstrip('0x').zfill(4)
+SERIAL_HIGH = 0 # read input from optParser
 RSV_BYTES_1 = b'\x00' + b'\x00'
 ENTRY_ADDR = b'\x98' + b'\x33' + b'\x02' + b'\x00'
 TLV_HEADER = 36 # 36 bytes header. Please refer the doc
@@ -63,7 +71,48 @@ DFU_FOUT = "FILES/QCA6290_SCAQBAFM_rampatch.dfu"
 
 
 def optParser():
-	pass
+	global SIGN_ALGO, IMG_TYPE, PRODUCT_ID, ROM_BUILD_VER, PATCH_VER
+	global ANT_RB_VER, SERIAL_LOW, SERIAL_HIGH, ENTRY_ADDR
+	desc = 'Signing Tool version' + str(SIGN_FMT_VER)
+	if sys.hexversion < PYTHON_VERSION:
+	#if sys.hexversion >= PYTHON_VERSION:
+		import argparse
+		parser = argparse.ArgumentParser(description = desc)
+		parser.add_argument('-a', '--ALGO', default=2, help='0:SHA256/ 1:ECDSA_P-256/ 2:RSA-2048_SHA256')
+		parser.add_argument('-b', '--ROM_VER', default=0, help='Patchee\'s rom build version')
+		parser.add_argument('-j', '--ENTRY_ADDR', default=0, help='The address of the application\'s entry')
+		parser.add_argument('-p', '--PATCH_VER', default=0, help='Patchee\'s patch build version')
+		parser.add_argument('-r', '--IMG_TYPE', default=0, help='Patch Image type')
+		parser.add_argument('-s', '--ANTI_ROLLBACK_VER', default=0, help='Image anti-rollback version')
+		parser.add_argument('-t', '--PROD_ID', default=0, help='Specify production Types/ID')
+		parser.add_argument('-x', '--SERIAL_LOW', default=0, help='Minor serial number')
+		parser.add_argument('-y', '--SERIAL_HIGH', default=0, help='Major serial number')
+		args = parser.parse_args()
+		SIGN_ALGO = args.ALGO
+		IMG_TYPE = args.IMG_TYPE
+		PRODUCT_ID = args.PROD_ID
+		ROM_BUILD_VER = args.ROM_VER
+		PATCH_VER = args.PATCH_VER
+		ANT_RB_VER = args.ANTI_ROLLBACK_VER
+		SERIAL_LOW = args.SERIAL_LOW
+		SERIAL_HIGH = args.SERIAL_HIGH
+		ENTRY_ADDR = args.ENTRY_ADDR
+		
+	else:
+		from optparse import OptionParser
+		print "using OptionParser"
+		parser = OptionParser(description=desc)
+		parser.add_option('-a', '--ALGO')
+		parser.add_option('-b', '--ROM_VER', default=0, help='Patchee\'s rom build version')
+		parser.add_option('-j', '--ENTRY_ADDR', default=0, help='The address of the application\'s entry')
+		parser.add_option('-p', '--PATCH_VER', default=0, help='Patchee\'s patch build version')
+		parser.add_option('-r', '--IMG_TYPE', default=0, help='Patch Image type')
+		parser.add_option('-s', '--ANTI_ROLLBACK_VER', default=0, help='Image anti-rollback version')
+		parser.add_option('-t', '--PROD_ID', default=0, help='Specify production Types/ID')
+		parser.add_option('-x', '--SERIAL_LOW', default=0, help='Minor serial number')
+		parser.add_option('-y', '--SERIAL_HIGH', default=0, help='Major serial number')
+		(opt, arg) = parser.parse_args()
+	exit()
 
 
 def getRSAData(fname):
@@ -178,9 +227,8 @@ def main():
 	except IOError:
 		print BIN_FIN + " not exist"
 		exit()
-
-print "*" * 24
-print "\tStart"
-print "*" * 24
+optParser()
+print "*" * 36
+print "\tGenerating binary..."
 main()
 		
