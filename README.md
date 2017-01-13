@@ -9,7 +9,7 @@
   	|Total Length	|4	|Length of the whole TLV data includes this field |
   	|Patch Data Length|4	|Length of patch data + 4 bytes CRC|
   	|Signing Format Version	|1	|Version of the signing format|
- 	|Signature Algorithm(i)	|1	|0: SHA256 hash 1: ECDSA_P-256_SHA256 2: RSA-2048_SHA256 3..255: Reserved|
+ 	|Signature Algorithm(i)	|1	|0: SHA256 hash 1: ECDSA_P-256_SHA256 2: RSA-2048_SHA256 3: CRC|
   	|Tlv Rsp Config		|1	|Tlv Response configuration|
   	|Image Type(i)		|1	|Image type|
   	|Product ID(i)		|2	|Indicate product ID the patch applies|
