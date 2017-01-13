@@ -59,7 +59,7 @@ SERIAL_HIGH = 0 # read input from optParser
 RSV_BYTES_1 = b'\x00' + b'\x00'
 #ENTRY_ADDR = b'\x98' + b'\x33' + b'\x02' + b'\x00'
 ENTRY_ADDR = b'\x00' * 4
-TLV_HEADER = 36 # 36 bytes header. Please refer the doc
+TLV_HEADER_LEN = 36 # 36 bytes header. Please refer the doc
 CRC32 = b'\x00' * 4
 SIGNATURE = b'\x00'* 256 # 256 bytes for RSA-2048
 PUB_KEY = ''
@@ -194,83 +194,163 @@ def getSignature(bstring):
         signature = signer.sign(hash)
 	return signature
 
-def TLVGenerator(input_list, output_fname):
+def TLVGenerator(rampatch_list, output_fname, rsp_config, hash_config=False):
 	pass
 	global TLV_LEN, TOTAL_LEN, ENTRY_ADDR, PATCH_LEN, PUB_KEY, CRC32, SIGNATURE
+	CRC32 = getCRC(rampatch_list)
+	SIGNATURE = getSignature(rampatch_list)
+	PATCH_LEN = len(rampatch_list) + len(CRC32)
+	PUB_KEY = getRSAData(PUB_KEY_FILE)
+	if hash_config:
+		pass
+
+	# contruct header #
+	fout_buf = struct.pack("B", TLV_TYPE) # byte0
+	TLV_LEN = TLV_HEADER_LEN + PATCH_LEN + len(SIGNATURE) + len(PUB_KEY)
+	fout_buf += struct.pack('B', (TLV_LEN % 256)) # byte1
+	fout_buf += struct.pack('B', ((TLV_LEN >> 8) % 256)) # byte2
+	fout_buf += struct.pack('B', ((TLV_LEN >> 16) % 256)) # byte3
+
+	TOTAL_LEN = TLV_HEADER_LEN + PATCH_LEN
+	fout_buf += struct.pack('B', ((TOTAL_LEN) % 256)) # byte4
+	fout_buf += struct.pack('B', ((TOTAL_LEN >> 8) % 256)) # byte5
+	fout_buf += struct.pack('B', ((TOTAL_LEN >> 16) % 256)) # byte6
+	fout_buf += struct.pack('B', ((TOTAL_LEN >> 24) % 256)) # byte7
+
+	fout_buf += struct.pack('B', ((PATCH_LEN) % 256)) # byte8
+	fout_buf += struct.pack('B', ((PATCH_LEN >> 8) % 256)) # byte9
+	fout_buf += struct.pack('B', ((PATCH_LEN >> 16) % 256)) # byte10
+	fout_buf += struct.pack('B', ((PATCH_LEN >> 24) % 256)) # byte11
+
+	fout_buf += struct.pack('B', ((SIGN_FMT_VER) % 256)) # byte12
+	fout_buf += struct.pack('B', ((SIGN_ALGO) % 256)) # byte13
+	fout_buf += struct.pack('B', ((rsp_config) % 256)) # byte14
+	fout_buf += struct.pack('B', ((IMG_TYPE) % 256)) # byte15
+
+	fout_buf += struct.pack('B', ((PRODUCT_ID) % 256)) # byte16
+	fout_buf += struct.pack('B', ((PRODUCT_ID >> 8)) % 256) # byte17
+	fout_buf += struct.pack('B', ((ROM_BUILD_VER >> 8) % 256)) # byte18 ?
+	fout_buf += struct.pack('B', ((ROM_BUILD_VER) % 256)) # byte19 ?
+
+	fout_buf += struct.pack('B', ((PATCH_VER) % 256)) # byte20
+	fout_buf += struct.pack('B', ((PATCH_VER >> 8) % 256)) # byte21
+	fout_buf += RSV_BYTES_0 # byte22, 23
+
+	fout_buf += struct.pack('B', ((ANT_RB_VER) % 256)) # byte24
+	fout_buf += struct.pack('B', ((ANT_RB_VER >> 8) % 256))# byte25
+	fout_buf += struct.pack('B', ((ANT_RB_VER >> 16) % 256))# byte26
+	fout_buf += struct.pack('B', ((ANT_RB_VER >> 24) % 256))# byte27
+
+	fout_buf += struct.pack('B', ((SERIAL_LOW) % 256)) # byte28
+	fout_buf += struct.pack('B', ((SERIAL_LOW >> 8) % 256)) # byte29
+	fout_buf += struct.pack('B', ((SERIAL_LOW >> 16) % 256)) # byte30
+	fout_buf += struct.pack('B', ((SERIAL_LOW >> 24) % 256)) # byte31
+
+	fout_buf += struct.pack('B', ((SERIAL_HIGH) % 256)) # byte32
+	fout_buf += struct.pack('B', ((SERIAL_HIGH >> 8) % 256)) # byte33
+	fout_buf += RSV_BYTES_1 # byte34, 35
+
+	ENTRY_ADDR = ENTRY_ADDR.lstrip('0x').zfill(8)
+	fout_buf += binascii.a2b_hex(ENTRY_ADDR[6:]) # byte36
+	fout_buf += binascii.a2b_hex(ENTRY_ADDR[4:6]) # byte37
+	fout_buf += binascii.a2b_hex(ENTRY_ADDR[2:4]) # byte38
+	fout_buf += binascii.a2b_hex(ENTRY_ADDR[0:2]) # byte39
+	# header finished #
+	
+	# body #
+	fout_buf += rampatch_list
+	fout_buf += CRC32
+	# body finished#
+	fout_buf += SIGNATURE
+	fout_buf += PUB_KEY
+		
+	try:
+		with open(output_fname, "w+b") as fout:
+			# write #
+			fout.write(fout_buf)
+	except IOError:
+		print "Failed to write " + output_fname
+		exit()
 
 def main():
 	global TLV_LEN, TOTAL_LEN, ENTRY_ADDR, PATCH_LEN, PUB_KEY, CRC32, SIGNATURE
 	try:
-		with open(BIN_FIN, "r+b") as fin, open("test3", "w+b") as fout:
+		with open(BIN_FIN, "r+b") as fin:
 			rampatch = fin.read()
-			CRC32 = getCRC(rampatch)
-			SIGNATURE = getSignature(rampatch)
-			PATCH_LEN = len(rampatch) + len(CRC32)
-			PUB_KEY = getRSAData(PUB_KEY_FILE)
-			# contruct header #
-			fout_buf = struct.pack("B", TLV_TYPE) # byte0
-			TLV_LEN = TLV_HEADER + PATCH_LEN + len(SIGNATURE) + len(PUB_KEY)
-			fout_buf += struct.pack('B', (TLV_LEN % 256)) # byte1
-			fout_buf += struct.pack('B', ((TLV_LEN >> 8) % 256)) # byte2
-			fout_buf += struct.pack('B', ((TLV_LEN >> 16) % 256)) # byte3
-			
-			TOTAL_LEN = TLV_HEADER + PATCH_LEN
-			fout_buf += struct.pack('B', ((TOTAL_LEN) % 256)) # byte4
-			fout_buf += struct.pack('B', ((TOTAL_LEN >> 8) % 256)) # byte5
-			fout_buf += struct.pack('B', ((TOTAL_LEN >> 16) % 256)) # byte6
-			fout_buf += struct.pack('B', ((TOTAL_LEN >> 24) % 256)) # byte7
-			
-			fout_buf += struct.pack('B', ((PATCH_LEN) % 256)) # byte8
-			fout_buf += struct.pack('B', ((PATCH_LEN >> 8) % 256)) # byte9
-			fout_buf += struct.pack('B', ((PATCH_LEN >> 16) % 256)) # byte10
-			fout_buf += struct.pack('B', ((PATCH_LEN >> 24) % 256)) # byte11
+			TLVGenerator(rampatch, SIGNED_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE)
+			TLVGenerator(rampatch, SIGNED_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE)
+	#	with open(BIN_FIN, "r+b") as fin, open("test3", "w+b") as fout:
+	#		rampatch = fin.read()
+	#		CRC32 = getCRC(rampatch)
+	#		SIGNATURE = getSignature(rampatch)
+	#		PATCH_LEN = len(rampatch) + len(CRC32)
+	#		PUB_KEY = getRSAData(PUB_KEY_FILE)
+	#		# contruct header #
+	#		fout_buf = struct.pack("B", TLV_TYPE) # byte0
+	#		TLV_LEN = TLV_HEADER_LEN + PATCH_LEN + len(SIGNATURE) + len(PUB_KEY)
+	#		fout_buf += struct.pack('B', (TLV_LEN % 256)) # byte1
+	#		fout_buf += struct.pack('B', ((TLV_LEN >> 8) % 256)) # byte2
+	#		fout_buf += struct.pack('B', ((TLV_LEN >> 16) % 256)) # byte3
+	#		
+	#		TOTAL_LEN = TLV_HEADER_LEN + PATCH_LEN
+	#		fout_buf += struct.pack('B', ((TOTAL_LEN) % 256)) # byte4
+	#		fout_buf += struct.pack('B', ((TOTAL_LEN >> 8) % 256)) # byte5
+	#		fout_buf += struct.pack('B', ((TOTAL_LEN >> 16) % 256)) # byte6
+	#		fout_buf += struct.pack('B', ((TOTAL_LEN >> 24) % 256)) # byte7
+	#		
+	#		fout_buf += struct.pack('B', ((PATCH_LEN) % 256)) # byte8
+	#		fout_buf += struct.pack('B', ((PATCH_LEN >> 8) % 256)) # byte9
+	#		fout_buf += struct.pack('B', ((PATCH_LEN >> 16) % 256)) # byte10
+	#		fout_buf += struct.pack('B', ((PATCH_LEN >> 24) % 256)) # byte11
 
-			fout_buf += struct.pack('B', ((SIGN_FMT_VER) % 256)) # byte12
-			fout_buf += struct.pack('B', ((SIGN_ALGO) % 256)) # byte13
-			fout_buf += struct.pack('B', ((TLV_RSP_CFG_ACK_CC_ACK_VSE) % 256)) # byte14
-			fout_buf += struct.pack('B', ((IMG_TYPE) % 256)) # byte15
+	#		fout_buf += struct.pack('B', ((SIGN_FMT_VER) % 256)) # byte12
+	#		fout_buf += struct.pack('B', ((SIGN_ALGO) % 256)) # byte13
+	#		fout_buf += struct.pack('B', ((TLV_RSP_CFG_ACK_CC_ACK_VSE) % 256)) # byte14
+	#		fout_buf += struct.pack('B', ((IMG_TYPE) % 256)) # byte15
 
-			fout_buf += struct.pack('B', ((PRODUCT_ID) % 256)) # byte16
-			fout_buf += struct.pack('B', ((PRODUCT_ID >> 8)) % 256) # byte17
-			fout_buf += struct.pack('B', ((ROM_BUILD_VER >> 8) % 256)) # byte18 ?
-			fout_buf += struct.pack('B', ((ROM_BUILD_VER) % 256)) # byte19 ?
-			
-			fout_buf += struct.pack('B', ((PATCH_VER) % 256)) # byte20
-			fout_buf += struct.pack('B', ((PATCH_VER >> 8) % 256)) # byte21
-			fout_buf += RSV_BYTES_0 # byte22, 23
+	#		fout_buf += struct.pack('B', ((PRODUCT_ID) % 256)) # byte16
+	#		fout_buf += struct.pack('B', ((PRODUCT_ID >> 8)) % 256) # byte17
+	#		fout_buf += struct.pack('B', ((ROM_BUILD_VER >> 8) % 256)) # byte18 ?
+	#		fout_buf += struct.pack('B', ((ROM_BUILD_VER) % 256)) # byte19 ?
+	#		
+	#		fout_buf += struct.pack('B', ((PATCH_VER) % 256)) # byte20
+	#		fout_buf += struct.pack('B', ((PATCH_VER >> 8) % 256)) # byte21
+	#		fout_buf += RSV_BYTES_0 # byte22, 23
 
-			fout_buf += struct.pack('B', ((ANT_RB_VER) % 256)) # byte24
-			fout_buf += struct.pack('B', ((ANT_RB_VER >> 8) % 256))# byte25
-			fout_buf += struct.pack('B', ((ANT_RB_VER >> 16) % 256))# byte26
-			fout_buf += struct.pack('B', ((ANT_RB_VER >> 24) % 256))# byte27
-			fout_buf += struct.pack('B', ((SERIAL_LOW) % 256)) # byte28
-			fout_buf += struct.pack('B', ((SERIAL_LOW >> 8) % 256)) # byte29
-			fout_buf += struct.pack('B', ((SERIAL_LOW >> 16) % 256)) # byte30
-			fout_buf += struct.pack('B', ((SERIAL_LOW >> 24) % 256)) # byte31
-			fout_buf += struct.pack('B', ((SERIAL_HIGH) % 256)) # byte32
-			fout_buf += struct.pack('B', ((SERIAL_HIGH >> 8) % 256)) # byte33
+	#		fout_buf += struct.pack('B', ((ANT_RB_VER) % 256)) # byte24
+	#		fout_buf += struct.pack('B', ((ANT_RB_VER >> 8) % 256))# byte25
+	#		fout_buf += struct.pack('B', ((ANT_RB_VER >> 16) % 256))# byte26
+	#		fout_buf += struct.pack('B', ((ANT_RB_VER >> 24) % 256))# byte27
 
-			fout_buf += RSV_BYTES_1 # byte34, 35
-			
-			print '*'
-			print 'address: %s' %(ENTRY_ADDR)
-			print '*'
-			ENTRY_ADDR = ENTRY_ADDR.lstrip('0x').zfill(8)
-			fout_buf += binascii.a2b_hex(ENTRY_ADDR[6:])
-			fout_buf += binascii.a2b_hex(ENTRY_ADDR[4:6])
-			fout_buf += binascii.a2b_hex(ENTRY_ADDR[2:4])
-			fout_buf += binascii.a2b_hex(ENTRY_ADDR[0:2])
-			# header finished #
+	#		fout_buf += struct.pack('B', ((SERIAL_LOW) % 256)) # byte28
+	#		fout_buf += struct.pack('B', ((SERIAL_LOW >> 8) % 256)) # byte29
+	#		fout_buf += struct.pack('B', ((SERIAL_LOW >> 16) % 256)) # byte30
+	#		fout_buf += struct.pack('B', ((SERIAL_LOW >> 24) % 256)) # byte31
 
-			fout_buf += rampatch
-			fout_buf += CRC32
-			fout_buf += SIGNATURE
-			fout_buf += PUB_KEY
+	#		fout_buf += struct.pack('B', ((SERIAL_HIGH) % 256)) # byte32
+	#		fout_buf += struct.pack('B', ((SERIAL_HIGH >> 8) % 256)) # byte33
 
-			fout.write(fout_buf)
-			#print 'os bin size %d' %(BIN_SIZE)
-			#print 'content size %d' %(len(content))
-			#print binascii.hexlify(content[0])
+	#		fout_buf += RSV_BYTES_1 # byte34, 35
+	#		
+	#		print '*'
+	#		print 'address: %s' %(ENTRY_ADDR)
+	#		print '*'
+	#		ENTRY_ADDR = ENTRY_ADDR.lstrip('0x').zfill(8)
+	#		fout_buf += binascii.a2b_hex(ENTRY_ADDR[6:])
+	#		fout_buf += binascii.a2b_hex(ENTRY_ADDR[4:6])
+	#		fout_buf += binascii.a2b_hex(ENTRY_ADDR[2:4])
+	#		fout_buf += binascii.a2b_hex(ENTRY_ADDR[0:2])
+	#		# header finished #
+
+	#		fout_buf += rampatch
+	#		fout_buf += CRC32
+	#		fout_buf += SIGNATURE
+	#		fout_buf += PUB_KEY
+
+	#		fout.write(fout_buf)
+	#		#print 'os bin size %d' %(BIN_SIZE)
+	#		#print 'content size %d' %(len(content))
+	#		#print binascii.hexlify(content[0])
 	except IOError:
 		print BIN_FIN + " not exist"
 		exit()
