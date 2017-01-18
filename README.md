@@ -19,7 +19,8 @@
   	|Anti-Rollback version(i)|4	|Anti-rollback version|
   	|Serial Number Low(i)	|4	|Serial Number low|
   	|Serial Number High(i)	|2	|Serial Number High|
-  	|Reserved		|2	|Reserved bytes|
+	|Debug Options		|1	|Debug options|
+  	|Reserved		|1	|Reserved bytes|
  	|Patch Entry Address(i)	|4	|Patch Entry Address(absolute address)|
   	|Patch Data		|Variable	|Patch data in binary format|
   	|Signature		|Variable (256 bytes if RSA-2048)|The Size depends on the algorithm|
