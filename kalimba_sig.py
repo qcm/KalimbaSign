@@ -57,19 +57,28 @@ TLV_HEADER_LEN = 36 # 36 bytes header. Please refer the doc
 CRC32 = b'\x00' * 4
 SIGNATURE = b'\x00'* 256 # 256 bytes for RSA-2048
 PUB_KEY = ''
-HASH = ''
+HASH = b'\x00' * 32
 
 ### FILES ###
-BIN_FIN = "FILES/QCA6290_SCAQBAFM_rampatch.bin"
+#BIN_FIN = "FILES/QCA6290_SCAQBAFM_rampatch.bin"
+BIN_FIN = "./SCAQBAF/rampatch/QCA6290_SCAQBAFM_rampatch.bin"
 BIN_SIZE = 0
-PUB_KEY_FILE = "FILES/test_key.txt"
-PRI_KEY_FILE = "FILES/test_prv_key.pem"
-CRC_FOUT = "QCA6290_SCAQBAFM_rampatch_crc.tlv"
-CRC_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_crc_opt.tlv"
-SIGNED_FOUT = "QCA6290_SCAQBAFM_rampatch_signed.tlv"
-SIGNED_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_signed_opt.tlv"
-HASH_FOUT = "QCA6290_SCAQBAFM_rampatch_hash.tlv"
-HASH_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
+#PUB_KEY_FILE = "FILES/test_key.txt"
+PUB_KEY_FILE = "test_key.txt"
+#PRI_KEY_FILE = "FILES/test_prv_key.pem"
+PRI_KEY_FILE = "test_prv_key.pem"
+#CRC_FOUT = "QCA6290_SCAQBAFM_rampatch_crc.tlv"
+CRC_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_crc.tlv"
+#CRC_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_crc_opt.tlv"
+CRC_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_crc_opt.tlv"
+#SIGNED_FOUT = "QCA6290_SCAQBAFM_rampatch_signed.tlv"
+SIGNED_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_signed.tlv"
+#SIGNED_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_signed_opt.tlv"
+SIGNED_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_signed_opt.tlv"
+#HASH_FOUT = "QCA6290_SCAQBAFM_rampatch_hash.tlv"
+HASH_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_hash.tlv"
+#HASH_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
+HASH_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
 
 
 def optParser():
@@ -212,34 +221,11 @@ def TLVGenerator(rampatch_list, output_fname, rsp_config, signed_config):
 	global TLV_LEN, TOTAL_LEN, ENTRY_ADDR, PATCH_LEN, PUB_KEY, CRC32, SIGNATURE
 
 	CRC32 = getCRC(rampatch_list)
-	if signed_config == 3:
-		HASH = ''
-		SIGNATURE = ''
-		PUB_KEY = ''
-	elif signed_config == 2:
-		HASH = ''
-		SIGNATURE = getSignature(rampatch_list)
-		PUB_KEY = getRSAData(PUB_KEY_FILE)
-	elif signed_config == 1:
-		HASH = ''
-		SIGNATURE = ''
-		PUB_KEY = ''
-	elif signed_config == 0:
-		HASH = getHASH(rampatch_list)
-		SIGNATURE = ''
-		PUB_KEY = ''
-
 	PATCH_LEN = len(rampatch_list) + len(CRC32)
 
 	# contruct header #
-	fout_buf = struct.pack("B", TLV_TYPE) # byte0
-	TLV_LEN = TLV_HEADER_LEN + PATCH_LEN + len(SIGNATURE) + len(PUB_KEY)
-	fout_buf += struct.pack('B', (TLV_LEN % 256)) # byte1
-	fout_buf += struct.pack('B', ((TLV_LEN >> 8) % 256)) # byte2
-	fout_buf += struct.pack('B', ((TLV_LEN >> 16) % 256)) # byte3
-
 	TOTAL_LEN = TLV_HEADER_LEN + PATCH_LEN
-	fout_buf += struct.pack('B', ((TOTAL_LEN) % 256)) # byte4
+	fout_buf = struct.pack('B', ((TOTAL_LEN) % 256)) # byte4
 	fout_buf += struct.pack('B', ((TOTAL_LEN >> 8) % 256)) # byte5
 	fout_buf += struct.pack('B', ((TOTAL_LEN >> 16) % 256)) # byte6
 	fout_buf += struct.pack('B', ((TOTAL_LEN >> 24) % 256)) # byte7
@@ -288,6 +274,25 @@ def TLVGenerator(rampatch_list, output_fname, rsp_config, signed_config):
 	# body #
 	fout_buf += rampatch_list
 	fout_buf += CRC32
+
+	if signed_config == 3:
+		HASH = ''
+		SIGNATURE = ''
+		PUB_KEY = ''
+	elif signed_config == 2:
+		HASH = ''
+		SIGNATURE = getSignature(rampatch_list)
+		PUB_KEY = getRSAData(PUB_KEY_FILE)
+	elif signed_config == 1:
+		HASH = ''
+		SIGNATURE = ''
+		PUB_KEY = ''
+	elif signed_config == 0:
+		# hash takes header + rampatch + crc, but without TLV header #
+		HASH = getHASH(fout_buf)
+		SIGNATURE = ''
+		PUB_KEY = ''
+
 	fout_buf += HASH
 	fout_buf += SIGNATURE
 	fout_buf += PUB_KEY
@@ -295,6 +300,12 @@ def TLVGenerator(rampatch_list, output_fname, rsp_config, signed_config):
 		
 	try:
 		with open(output_fname, "w+b") as fout:
+			# contruct TLV header #
+			fout.write(struct.pack("B", TLV_TYPE)) # byte0
+			TLV_LEN = TLV_HEADER_LEN + PATCH_LEN + len(HASH) + len(SIGNATURE) + len(PUB_KEY)
+			fout.write(struct.pack('B', (TLV_LEN % 256))) # byte1
+			fout.write(struct.pack('B', ((TLV_LEN >> 8) % 256))) # byte2
+			fout.write(struct.pack('B', ((TLV_LEN >> 16) % 256))) # byte3
 			# write #
 			fout.write(fout_buf)
 			fout.close()
