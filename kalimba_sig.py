@@ -50,7 +50,8 @@ RSV_BYTES_0 = b'\x00' + b'\x00'
 ANT_RB_VER = 0 # read input from optParser
 SERIAL_LOW = 0 # read input from optParser
 SERIAL_HIGH = 0 # read input from optParser
-RSV_BYTES_1 = b'\x00' + b'\x00'
+DEBUG_OPTIONS = 0
+RSV_BYTES_1 = b'\x00'
 ENTRY_ADDR = b'\x00' * 4
 TLV_HEADER_LEN = 36 # 36 bytes header. Please refer the doc
 CRC32 = b'\x00' * 4
@@ -72,7 +73,7 @@ HASH_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
 
 
 def optParser():
-	global SIGN_ALGO, IMG_TYPE, PRODUCT_ID, ROM_BUILD_VER, PATCH_VER
+	global SIGN_ALGO, IMG_TYPE, PRODUCT_ID, ROM_BUILD_VER, PATCH_VER, DEBUG_OPTIONS
 	global ANT_RB_VER, SERIAL_LOW, SERIAL_HIGH, ENTRY_ADDR
 	desc = 'Signing Tool version' + str(SIGN_FMT_VER)
 	#if sys.hexversion < PYTHON_VERSION:
@@ -82,6 +83,7 @@ def optParser():
 		parser = argparse.ArgumentParser(description = desc)
 		parser.add_argument('-a', '--ALGO', type=int, default=-1, help='Signing algorithm. 0:SHA256/ 1:ECDSA_P-256/ 2:RSA-2048_SHA256(default)/ 3: CRC')
 		parser.add_argument('-b', '--ROM_VER', type=int, default=1, help='Patchee\'s rom build version')
+		parser.add_argument('-d', '--DEBUG_OPTIONS', type=int, default=0, help='Debuging options')
 		parser.add_argument('-j', '--ENTRY_ADDR', type=str, default='0x00023398', help='The big-endian address of the application\'s entry')
 		parser.add_argument('-p', '--PATCH_VER', type=int, default=2, help='Patchee\'s patch build version')
 		parser.add_argument('-r', '--IMG_TYPE', type=int, default=0, help='Patch Image type. 1: M0(default)/ 2: Kalimba')
@@ -100,6 +102,7 @@ def optParser():
 		SERIAL_LOW = args.SERIAL_LOW
 		SERIAL_HIGH = args.SERIAL_HIGH
 		ENTRY_ADDR = args.ENTRY_ADDR
+		DEBUG_OPTIONS = args.DEBUG_OPTIONS
 		
 	else:
 		from optparse import OptionParser
@@ -107,6 +110,7 @@ def optParser():
 		parser = OptionParser(description=desc)
 		parser.add_option('-a', '--ALGO', type='int', default=-1, help='Signing algorithm. 0:SHA256/ 1:ECDSA_P-256/ 2:RSA-2048_SHA256/ 3: CRC')
 		parser.add_option('-b', '--ROM_VER', type=int, default=1, help='Patchee\'s rom build version')
+		parser.add_option('-d', '--DEBUG_OPTIONS', type=int, default=0, help='Debuging options')
 		parser.add_option('-j', '--ENTRY_ADDR', default='0x00023398', help='The big-endian address of the application\'s entry')
 		parser.add_option('-p', '--PATCH_VER', type=int, default=2, help='Patchee\'s patch build version')
 		parser.add_option('-r', '--IMG_TYPE', type=int, default=0, help='Patch Image type. 1: M0(default)/ 2: Kalimba')
@@ -125,6 +129,7 @@ def optParser():
 		SERIAL_LOW = opt.SERIAL_LOW
 		SERIAL_HIGH = opt.SERIAL_HIGH
 		ENTRY_ADDR = opt.ENTRY_ADDR
+		DEBUG_OPTIONS = opt.DEBUG_OPTIONS
 	# ++debug++ #
 	print "signing algorithm: %d" %(SIGN_ALGO)
 	print "image type: %d" %(IMG_TYPE)
@@ -135,6 +140,7 @@ def optParser():
 	print "serial low: %d" %(SERIAL_LOW)
 	print "serial high: %d" %(SERIAL_HIGH)
 	print "application entry address: %s" %(ENTRY_ADDR)
+	print "debug options: %d" %(DEBUG_OPTIONS)
 	# --debug-- #
 
 
@@ -269,7 +275,8 @@ def TLVGenerator(rampatch_list, output_fname, rsp_config, signed_config):
 
 	fout_buf += struct.pack('B', ((SERIAL_HIGH) % 256)) # byte32
 	fout_buf += struct.pack('B', ((SERIAL_HIGH >> 8) % 256)) # byte33
-	fout_buf += RSV_BYTES_1 # byte34, 35
+	fout_buf += struct.pack('B', ((DEBUG_OPTIONS) % 256)) # byte34
+	fout_buf += RSV_BYTES_1 # byte35
 
 	ENTRY_ADDR = ENTRY_ADDR.lstrip('0x').zfill(8)
 	fout_buf += binascii.a2b_hex(ENTRY_ADDR[6:]) # byte36
@@ -290,6 +297,7 @@ def TLVGenerator(rampatch_list, output_fname, rsp_config, signed_config):
 		with open(output_fname, "w+b") as fout:
 			# write #
 			fout.write(fout_buf)
+			fout.close()
 	except IOError:
 		print "Failed to write " + output_fname
 		exit()
@@ -299,6 +307,7 @@ def main():
 	try:
 		with open(BIN_FIN, "r+b") as fin:
 			rampatch = fin.read()
+			fin.close()
 			if SIGN_ALGO == -1:
 				TLVGenerator(rampatch, CRC_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 3)
 				TLVGenerator(rampatch, CRC_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 3)
@@ -320,7 +329,7 @@ def main():
 				
 
 	except IOError:
-		print BIN_FIN + " not exist"
+		print "Input not exist"
 		exit()
 optParser()
 print "*" * 36
