@@ -1,0 +1,210 @@
+; OTP programming for Napier Emulation
+
+; OTP_0 shadow register
+; Bit 2: OTP Programmed, 1(OTP is valid), 0(OTP is invalid)
+; Bit 3: BT Mode, 1(Regular mode), 0(EDL mode)
+; Bit 4: Wipower Fastboot Mode
+; Bit 5: Boot Patch
+LOCAL &OTP_SHADOW
+&OTP_SHADOW=0x0000000C
+IF "&wipower_prufe"=="WIPOWER_STARK_I2C"
+(
+  &OTP_SHADOW=&OTP_SHADOW|0x00000010
+)
+ELSE IF "&wipower_prufe"=="WIPOWER_STARK_OWI"
+(
+  &OTP_SHADOW=&OTP_SHADOW|0x00000010
+)
+D.S D:0xC0031C00 %long &OTP_SHADOW
+PRINT "OTP_SHADOW &OTP_SHADOW"
+
+; ONLY for bringup usage when OTP_SHADOW Register doesn't work
+; OTP, Byte 512
+; WIP Reserved OTP
+; Bit 0: Wipower Fastboot Mode
+LOCAL &WIPOWER_FASTBOOT
+&WIPOWER_FASTBOOT=0x00000000
+IF "&wipower_prufe"=="WIPOWER_STARK_I2C"
+(
+  &WIPOWER_FASTBOOT=&WIPOWER_FASTBOOT|0x00000001
+)
+ELSE IF "&wipower_prufe"=="WIPOWER_STARK_OWI"
+(
+  &WIPOWER_FASTBOOT=&WIPOWER_FASTBOOT|0x00000001
+)
+D.S D:0xC0030000+0x200 %long &WIPOWER_FASTBOOT
+PRINT "WIPOWER_FASTBOOT &WIPOWER_FASTBOOT"
+
+;Power up QFPROM
+;Enable QFPROM clk, A_BT_SEC_REG_QFPROM_CLK_CTL=0
+D.S D:0xC0030B6C %long 0x00000000
+;Config register, A_BT_SEC_REG_QFPROM_ACCEL
+D.S D:0xC0030D08 %long 0x00000100
+;Write QFPROM Enable, A_BT_SEC_REG_QFPROM_WRITE_DISABLE_STICKY_BIT
+D.S D:0xC0030B74 %long 0x00000000
+;Config register QFPROM blow timer, QFPROM_BLOW_TIMER=F0
+D.S D:0xC0030D00 %long 0x000000F0
+
+; TOP_VALID_INDICATOR(Magic Number), A_BT_FUSE_QFPROM_RAW_BT_ROW0_LSB: OTP_MAGIC_NUMBER=0x7689AC1C
+; OTP, Byte 312, 313, 314, 315 = 0x7689AC1C
+D.S D:(0xC0030000+0x138) %long 0x7689AC1C
+
+; OTP, Byte 322
+; Bit 0: BT_MODE, 1(Normal Mode), 0(EDL)
+; Bit 1: HCI Interface, 1 (USB), 0 (UART)
+; Bit 2: AUTOBAUD
+; Bit 3: EDL_OVR_DBGUART
+; Bit 4: 64M
+; Bit 7: 0 = Silicon, 1 = Emulation
+; From legacy top_setting.cmm, removed Debug Mode and Test Mode
+; OTP, Byte 323
+LOCAL &MCI_ENABLE
+&MCI_ENABLE=0x00000000
+IF "&mci_enable"=="MCI"
+  &MCI_ENABLE=&MCI_ENABLE|0x10000000
+
+IF "&usb_enable"=="USB"
+  &MCI_ENABLE=&MCI_ENABLE|0x00020000
+
+IF "&cpu_64mhz"=="64MHZ"
+(
+    &MCI_ENABLE=&MCI_ENABLE|0x00910000
+    D.S D:(0xC0030000+0x140) %long &MCI_ENABLE
+
+    ; fm_disable is bit 217 in the TOP section (27 bytes from the start of the 
+    ; TOP section). This means that it is 3rd row (each row is 64 bits), 3rd byte, BIT0
+    ; Since we have exceeded the ROM size for 64MHz, and FM is at the end of ROM, disable FM
+    ; for 64MHz build.
+    D.S D:(0xC0030000+0x20) %long 0x01000000
+)
+ELSE
+(
+    &MCI_ENABLE=&MCI_ENABLE|0x00810000
+    D.S D:(0xC0030000+0x140) %long &MCI_ENABLE
+)
+
+;OTP, Byte 324
+; Bit 3: Patch signing, 0 (Disable)/ 1 (Enable)
+D.S D:(0xC0030000+0x140) %long 0x08000000
+
+; ==========================================================================
+; OTP, Byte 464 - PFAL_SYS_TOP_DSet.uBTBootMode[0]/PFAL_SYS_TOP_WIP_CFG0
+; Bit 0: WIP_PRUFE BIT0
+; Bit 1: WIP_PRUFE BIT1
+; Bit 2: WIP_PRUFE BIT2
+; Bit 3: WIP_PRUFE BIT3
+;   - PFAL_SYS_TOP_WIP_PRUFE_HUTCH ~0
+;   - PFAL_SYS_TOP_WIP_PRUFE_NX2A4WP ~1
+;   - PFAL_SYS_TOP_WIP_PRUFE_STARK18OHM ~2
+;   - PFAL_SYS_TOP_WIP_PRUFE_STARK36OHM ~3
+;   - PFAL_SYS_TOP_WIP_PRUFE_STARK18OHM_I2C ~4
+;   - PFAL_SYS_TOP_WIP_PRUFE_STARK36OHM_I2C ~5
+; Bit 4: WIP_DUALSTACK_EN
+; Bit 5: WIP_3RD
+; Bit 6: WIP_FLASH_PATCH
+; Bit 7: WIP_CFG0_VALID_OTP
+; OTP, Byte 465 - PFAL_SYS_TOP_DSet.uBTBootMode[1]/PFAL_SYS_TOP_WIP_CFG1
+; Bit 0: WIP_PRU_IMPEDANCE_SHIFT_CAT BIT0
+; Bit 1: WIP_PRU_IMPEDANCE_SHIFT_CAT BIT1
+; Bit 2: WIP_PRU_IMPEDANCE_SHIFT_CAT BIT2
+; Bit 3: WIP_LE_ADV_FROM_FLASH
+; Bit 4: WIP_LE_ADV_INTERVAL BIT0
+; Bit 5: WIP_LE_ADV_INTERVAL BIT1
+; Bit 6: WIP_EMBEDDED_RF_REG_UPDATE
+; Bit 7: WIP_GO_FASTBOOT
+LOCAL &WIPOWER_CFG
+&WIPOWER_CFG=0x00000000
+
+IF "&wipower_prufe"=="WIPOWER_STARK_I2C"
+(
+    ; It seems Stark EVB uses 36OHM by default.
+    &WIPOWER_CFG=&WIPOWER_CFG|0x00000005
+)
+ELSE IF "&wipower_prufe"=="WIPOWER_STARK_OWI"
+(
+    &WIPOWER_CFG=&WIPOWER_CFG|0x00000003
+)
+IF "&wipower_ds"=="WIPOWER_DS_ENABLE"
+(
+    &WIPOWER_CFG=&WIPOWER_CFG|0x00000010
+)
+
+D.S D:(0xC0030000+0x1D0) %long &WIPOWER_CFG
+PRINT "WIPOWER_CFG &WIPOWER_CFG"
+; ==========================================================================
+
+; OTP, Byte 394
+; Bit 0: SHA256_HW_SW, 1(SW based SHA), 0(HW based SHA), default - 0
+;D.S D:(0xC0030000+0x188) %long 0x00000000
+;D.S D:(0xC0030000+0x188) %long 0x00010000
+
+; Bit 0: OEM_SECURE_BOOT_0_AUTH_EN, 0 (Disable)/ 1 (Enable)
+D.S D:(0xC0030000+0xe0) %long 0x00000001
+
+; Bit 3: ANTI_ROLLBACK_FEATURE_EN_M0, 0 (Disable)/ 1 (Enable) 
+;HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_ANTI_ROLLBACK_FEATURE_EN_KALIMBA_BMSK                                    0x10
+;HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_ANTI_ROLLBACK_FEATURE_EN_M0_BMSK                                          0x8
+;HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_DYNAMICDOWNLOAD_BMSK                 0x4
+;HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_BMSK                                 0x2
+;HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_M0_BMSK                                      0x1
+D.S D:(0xC0030000+0xe8) %long 0x00000009
+
+; OEM_PK_HASH_M0_ROW_4_LSB
+;D.S D:(0xC0030000+0xc0) %long 0x5189bd08
+
+; OEM_PK_HASH_M0_ROW_4_MSB
+;D.S D:(0xC0030000+0xc4) %long 0xa0565cd7 
+
+; OEM_PK_HASH_M0_ROW_5_LSB
+;D.S D:(0xC0030000+0xc8) %long 0xaa8b1c73
+
+; OEM_PK_HASH_M0_ROW_5_MSB
+;D.S D:(0xC0030000+0xcc) %long 0x9fe2d786
+
+; OEM_PK_HASH_M0_ROW_6_LSB
+;D.S D:(0xC0030000+0xd0) %long 0xdd1a6076
+
+; OEM_PK_HASH_M0_ROW_6_MSB
+;D.S D:(0xC0030000+0xd4) %long 0x94618481
+
+; OEM_PK_HASH_M0_ROW_7_LSB
+;D.S D:(0xC0030000+0xd8) %long 0x57ed4f6f
+
+; OEM_PK_HASH_M0_ROW_7_MSB
+;D.S D:(0xC0030000+0xdc) %long 0x800baaa8
+
+
+
+; OEM_PK_HASH_M0_ROW_4_LSB
+D.S D:(0xC0030000+0xc0) %long 0x803d57d7  
+
+; OEM_PK_HASH_M0_ROW_4_MSB
+D.S D:(0xC0030000+0xc4) %long 0xfe4d9327  
+
+; OEM_PK_HASH_M0_ROW_5_LSB
+D.S D:(0xC0030000+0xc8) %long 0xaf1cc38f 
+
+; OEM_PK_HASH_M0_ROW_5_MSB
+D.S D:(0xC0030000+0xcc) %long 0xb1ffff54 
+
+; OEM_PK_HASH_M0_ROW_6_LSB
+D.S D:(0xC0030000+0xd0) %long 0xc90df820
+
+; OEM_PK_HASH_M0_ROW_6_MSB
+D.S D:(0xC0030000+0xd4) %long 0x49e3a461
+
+; OEM_PK_HASH_M0_ROW_7_LSB
+D.S D:(0xC0030000+0xd8) %long 0xd0be74b7 
+
+; OEM_PK_HASH_M0_ROW_7_MSB
+D.S D:(0xC0030000+0xdc) %long 0xd7caa46a
+
+; A_BT_FUSE_QFPROM_RAW_ANTI_ROLLBACK_MSB : 0xC0030094
+D.S D:(0xC0030000+0x94) %long 0x00000001
+
+; A_BT_FUSE_QFPROM_RAW_TOP_ROW5_LSB : 0xC0030030
+D.S D:(0xC0030000+0x30) %long 0xEFEFEFEF
+
+; A_BT_FUSE_QFPROM_RAW_TOP_ROW5_MSB : 0xC0030034
+D.S D:(0xC0030000+0x34) %long 0x0000ABCD
+
