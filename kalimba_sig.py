@@ -7,25 +7,6 @@ from Crypto.Signature import PKCS1_PSS
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 
-
-### Environment Variables ###
-# Setting up Environment for Napier QCA6290
-#BUILD_ASIC=6290
-#MSM_ID=6290
-#HAL_PLATFORM=6290
-#TARGET_FAMILY=6290
-#CHIPSET=QCA6290
-#CHIP_VER=0100
-#BUILD_VER=${BUILD_VER:-0001}
-#PHY=${PHY:-SILICON_RECONFIGURABLE_BY_JTAG}
-#INCLUDE_FM=1
-#INCLUDE_FM_TX=0
-#IMAGE_TYPE=0
-#ANTIROLLBACK_VERSION=0x3
-#SERIAL_NO_LOW=0x0
-#SERIAL_NO_HIGH=0x0
-#DEBUG_OPTIONS=0x0
-
 ### Python ###
 # higher than this support argparse
 PYTHON_VERSION = 0x02070000
@@ -60,25 +41,27 @@ PUB_KEY = ''
 HASH = b'\x00' * 32
 
 ### FILES ###
-#BIN_FIN = "FILES/QCA6290_SCAQBAFM_rampatch.bin"
-BIN_FIN = "./SCAQBAF/rampatch/QCA6290_SCAQBAFM_rampatch.bin"
 BIN_SIZE = 0
-#PUB_KEY_FILE = "FILES/test_key.txt"
-PUB_KEY_FILE = "test_key.txt"
-#PRI_KEY_FILE = "FILES/test_prv_key.pem"
-PRI_KEY_FILE = "test_prv_key.pem"
-#CRC_FOUT = "QCA6290_SCAQBAFM_rampatch_crc.tlv"
-CRC_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_crc.tlv"
-#CRC_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_crc_opt.tlv"
-CRC_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_crc_opt.tlv"
-#SIGNED_FOUT = "QCA6290_SCAQBAFM_rampatch_signed.tlv"
-SIGNED_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_signed.tlv"
-#SIGNED_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_signed_opt.tlv"
-SIGNED_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_signed_opt.tlv"
-#HASH_FOUT = "QCA6290_SCAQBAFM_rampatch_hash.tlv"
-HASH_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_hash.tlv"
-#HASH_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
-HASH_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
+BIN_FIN = "FILES/QCA6290_SCAQBAFM_rampatch.bin"
+PUB_KEY_FILE = "FILES/test_key.txt"
+PRI_KEY_FILE = "FILES/test_prv_key.pem"
+CRC_FOUT = "QCA6290_SCAQBAFM_rampatch_crc.tlv"
+CRC_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_crc_opt.tlv"
+SIGNED_FOUT = "QCA6290_SCAQBAFM_rampatch_signed.tlv"
+SIGNED_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_signed_opt.tlv"
+HASH_FOUT = "QCA6290_SCAQBAFM_rampatch_hash.tlv"
+HASH_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
+CMM_FOUT = "otp_simulation.cmm"
+#BIN_FIN = "./SCAQBAF/rampatch/QCA6290_SCAQBAFM_rampatch.bin"
+#PUB_KEY_FILE = "test_key.txt"
+#PRI_KEY_FILE = "test_prv_key.pem"
+#CRC_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_crc.tlv"
+#CRC_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_crc_opt.tlv"
+#SIGNED_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_signed.tlv"
+#SIGNED_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_signed_opt.tlv"
+#HASH_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_hash.tlv"
+#HASH_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
+#CMM_FOUT = "../../t32/otp_simulation.cmm"
 
 
 def optParser():
@@ -201,7 +184,6 @@ def getSignature(bstring):
 	privateKey = RSA.importKey(open(PRI_KEY_FILE).read())
         hash = SHA256.new()
         hash.update(bstring)
-        #print(hash.hexdigest())
         signer = PKCS1_PSS.new(privateKey)
         signature = signer.sign(hash)
 	return signature
@@ -313,6 +295,96 @@ def TLVGenerator(rampatch_list, output_fname, rsp_config, signed_config):
 		print "Failed to write " + output_fname
 		exit()
 
+def otp_lt_format(hash_str):
+	it = iter(hash_str)
+	output_list = []
+	for x in it:
+		b6 = x
+		b7 = next(it)
+		b4 = next(it)
+		b5 = next(it)
+		b2 = next(it)
+		b3 = next(it)
+		b0 = next(it)
+		b1 = next(it)
+		output_list.append(b0+b1+b2+b3+b4+b5+b6+b7)
+	return output_list
+
+
+def OTPGen(option):
+	sHeader = '; OTP programming for Napier Emulation\n'
+	sHeader += '; OTP_0 shadow register\n'
+	sHeader += '; Bit 2: OTP Programmed, 1(OTP is valid), 0(OTP is invalid)\n'
+	sHeader += '; Bit 3: BT Mode, 1(Regular mode), 0(EDL mode)\n'
+	sHeader += '; Bit 4: Wipower Fastboot Mode\n'
+	sHeader += '; Bit 5: Boot Patch\n'
+	if option == 0:
+		sbuf = '; Bit 0: OEM_SECURE_BOOT_0_AUTH_EN, 0 (Disable)/ 1 (Enable)\n'
+		sbuf += 'D.S D:(0xC0030000+0xe0) %long 0x00000000\n'
+		sbuf += '\n; Bit 2: HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_DYNAMICDOWNLOAD, 0 (Disable)/ 1 (Enable)\n'
+		sbuf += '; Bit 1: HASH_INTEGRITY_CHECK_DISABLE_KALIMBA, 0 (Disable)/ 1 (Enable)\n'
+		sbuf += '; Bit 0: HASH_INTEGRITY_CHECK_DISABLE_M0, 0 (Disable)/ 1 (Enable)\n'
+		sbuf += ';HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_DYNAMICDOWNLOAD_BMSK                 0x4\n'
+		sbuf += ';HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_BMSK                                 0x2\n'
+		sbuf += ';HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_M0_BMSK                                      0x1\n'
+		sbuf += 'D.S D:(0xC0030000+0xe8) %%long %#010x\n\n' %(IMG_TYPE)
+	elif option == 2:
+		sbuf = '; Bit 0: OEM_SECURE_BOOT_0_AUTH_EN, 0 (Disable)/ 1 (Enable)\n'
+		sbuf += 'D.S D:(0xC0030000+0xe0) %%long %#010x\n\n' %(IMG_TYPE)
+		sbuf += '; Hash of public key.\n\n'
+		hash = SHA256.new()
+		hash.update(getRSAData(PUB_KEY_FILE))
+		pb_key_hash = otp_lt_format(hash.hexdigest())
+		sbuf += '; OEM_PK_HASH_M0_ROW_4_LSB\n'
+		sbuf += 'D.S D:(0xC0030000+0xc0) %%long 0x%s\n\n' %(pb_key_hash[0])
+		sbuf += '; OEM_PK_HASH_M0_ROW_4_MSB\n'
+		sbuf += 'D.S D:(0xC0030000+0xc4) %%long 0x%s\n\n' %(pb_key_hash[1])
+		sbuf += '; OEM_PK_HASH_M0_ROW_5_LSB\n'
+		sbuf += 'D.S D:(0xC0030000+0xc8) %%long 0x%s\n\n' %(pb_key_hash[2])
+		sbuf += '; OEM_PK_HASH_M0_ROW_5_MSB\n'
+		sbuf += 'D.S D:(0xC0030000+0xcc) %%long 0x%s\n\n' %(pb_key_hash[3])
+		sbuf += '; OEM_PK_HASH_M0_ROW_6_LSB\n'
+		sbuf += 'D.S D:(0xC0030000+0xd0) %%long 0x%s\n\n' %(pb_key_hash[4])
+		sbuf += '; OEM_PK_HASH_M0_ROW_6_MSB\n'
+		sbuf += 'D.S D:(0xC0030000+0xd4) %%long 0x%s\n\n' %(pb_key_hash[5])
+		sbuf += '; OEM_PK_HASH_M0_ROW_7_LSB\n'
+		sbuf += 'D.S D:(0xC0030000+0xd8) %%long 0x%s\n\n' %(pb_key_hash[6])
+		sbuf += '; OEM_PK_HASH_M0_ROW_7_MSB\n'
+		sbuf += 'D.S D:(0xC0030000+0xdc) %%long 0x%s\n\n' %(pb_key_hash[7])
+	elif option == 3:
+		sbuf = '; Bit 0: OEM_SECURE_BOOT_0_AUTH_EN, 0 (Disable)/ 1 (Enable)\n'
+		sbuf += 'D.S D:(0xC0030000+0xe0) %%long %#010x\n\n' %(IMG_TYPE)
+		sbuf += '; Bit 2: HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_DYNAMICDOWNLOAD, 0 (Disable)/ 1 (Enable)\n'
+		sbuf += '; Bit 1: HASH_INTEGRITY_CHECK_DISABLE_KALIMBA, 0 (Disable)/ 1 (Enable)\n'
+		sbuf += '; Bit 0: HASH_INTEGRITY_CHECK_DISABLE_M0, 0 (Disable)/ 1 (Enable)\n'
+		sbuf += ';HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_DYNAMICDOWNLOAD_BMSK                 0x4\n'
+		sbuf += ';HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_BMSK                                 0x2\n'
+		sbuf += ';HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_M0_BMSK                                      0x1\n'
+		sbuf += 'D.S D:(0xC0030000+0xe8) %%long %#010x\n\n' %(IMG_TYPE)
+
+	# Common settings #
+	# Anti-rollback version:
+	sbuf += '; A_BT_FUSE_QFPROM_RAW_ANTI_ROLLBACK_MSB : 0xC0030094\n'
+    	sbuf += 'D.S D:(0xC0030000+0x94) %long 0x00000007\n\n'
+    	sbuf += '; Bit 3: ANTI_ROLLBACK_FEATURE_EN_M0, 0 (Disable)/ 1 (Enable)\n'
+	sbuf += ';HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_ANTI_ROLLBACK_FEATURE_EN_KALIMBA_BMSK                                    0x10\n'
+    	sbuf += ';HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_ANTI_ROLLBACK_FEATURE_EN_M0_BMSK                                          0x8\n'
+    	sbuf += 'D.S D:(0xC0030000+0xe8) %long 0x00000008\n\n'
+
+    	# Debug options based on Serial number match:
+        sbuf += '; A_BT_FUSE_QFPROM_RAW_TOP_ROW5_LSB : 0xC0030030\n'
+        sbuf += 'D.S D:(0xC0030000+0x30) %long 0xEFEFEFEF\n\n'
+
+        sbuf += '; A_BT_FUSE_QFPROM_RAW_TOP_ROW5_MSB : 0xC0030034\n'
+        sbuf += 'D.S D:(0xC0030000+0x34) %long 0x0000ABCD\n\n'
+
+
+	with open(CMM_FOUT, "w") as fout:
+		fout.write(sHeader)
+		fout.write(sbuf)
+		fout.close()
+
+
 def main():
 	global TLV_LEN, TOTAL_LEN, ENTRY_ADDR, PATCH_LEN, PUB_KEY, CRC32, SIGNATURE
 	try:
@@ -328,15 +400,19 @@ def main():
 
 				TLVGenerator(rampatch, HASH_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 0)
 				TLVGenerator(rampatch, HASH_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 0)
+				#OTPGen(-1)
 			elif SIGN_ALGO == 0:
 				TLVGenerator(rampatch, HASH_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 0)
 				TLVGenerator(rampatch, HASH_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 0)
+				OTPGen(0)
 			elif SIGN_ALGO == 2:
 				TLVGenerator(rampatch, SIGNED_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 2)
 				TLVGenerator(rampatch, SIGNED_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 2)
+				OTPGen(2)
 			elif SIGN_ALGO == 3:
 				TLVGenerator(rampatch, CRC_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 3)
 				TLVGenerator(rampatch, CRC_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 3)
+				OTPGen(3)
 				
 
 	except IOError:
