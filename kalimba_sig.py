@@ -42,9 +42,11 @@ HASH = b'\x00' * 32
 
 ### FILES ###
 BIN_SIZE = 0
-BIN_FIN = "FILES/QCA6290_SCAQBAFM_rampatch.bin"
-PUB_KEY_FILE = "FILES/test_key.txt"
-PRI_KEY_FILE = "FILES/test_prv_key.pem"
+DIR_OUT = "./"
+DIR_IN = "./"
+BIN_FIN = "QCA6290_SCAQBAFM_rampatch.bin"
+PUB_KEY_FILE = "test_key.txt"
+PRI_KEY_FILE = "test_prv_key.pem"
 CRC_FOUT = "QCA6290_SCAQBAFM_rampatch_crc.tlv"
 CRC_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_crc_opt.tlv"
 SIGNED_FOUT = "QCA6290_SCAQBAFM_rampatch_signed.tlv"
@@ -52,76 +54,123 @@ SIGNED_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_signed_opt.tlv"
 HASH_FOUT = "QCA6290_SCAQBAFM_rampatch_hash.tlv"
 HASH_OPT_FOUT = "QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
 CMM_FOUT = "otp_simulation.cmm"
-#BIN_FIN = "./SCAQBAF/rampatch/QCA6290_SCAQBAFM_rampatch.bin"
-#PUB_KEY_FILE = "test_key.txt"
-#PRI_KEY_FILE = "test_prv_key.pem"
-#CRC_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_crc.tlv"
-#CRC_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_crc_opt.tlv"
-#SIGNED_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_signed.tlv"
-#SIGNED_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_signed_opt.tlv"
-#HASH_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_hash.tlv"
-#HASH_OPT_FOUT = "./SCAQBAF/rampatch/_QCA6290_SCAQBAFM_rampatch_hash_opt.tlv"
-#CMM_FOUT = "../../t32/otp_simulation.cmm"
+
+# input_to_int #
+# detect the param is hex or int, transfer it to int
+def input_to_int(param):
+	if type(param) is int: return param
+	if param.isdigit():
+		return int(param, 10)
+	elif param[0] == '0' and param[1] == 'x':
+		try:
+			return int(param.lstrip('0x'), 16)
+		except ValueError:
+			print 'Not a valid input'
+			exit()
+	else:
+		print 'Not a valid input'
+		exit()
 
 
 def optParser():
 	global SIGN_ALGO, IMG_TYPE, PRODUCT_ID, ROM_BUILD_VER, PATCH_VER, DEBUG_OPTIONS
-	global ANT_RB_VER, SERIAL_LOW, SERIAL_HIGH, ENTRY_ADDR
+	global ANT_RB_VER, SERIAL_LOW, SERIAL_HIGH, ENTRY_ADDR, DIR_OUT, DIR_IN
 	desc = 'Signing Tool version' + str(SIGN_FMT_VER)
 	#if sys.hexversion < PYTHON_VERSION:
 	if sys.hexversion >= PYTHON_VERSION:
 		import argparse
 		print "using ArgumentParser"
 		parser = argparse.ArgumentParser(description = desc)
-		parser.add_argument('-a', '--ALGO', type=int, default=-1, help='Signing algorithm. 0:SHA256/ 1:ECDSA_P-256/ 2:RSA-2048_SHA256(default)/ 3: CRC')
-		parser.add_argument('-b', '--ROM_VER', type=int, default=1, help='Patchee\'s rom build version')
-		parser.add_argument('-d', '--DEBUG_OPTIONS', type=int, default=0, help='Debuging options')
+		parser.add_argument('-a', '--ALGO', default=-1, help='Signing algorithm. 0:SHA256/ 1:ECDSA_P-256/ 2:RSA-2048_SHA256(default)/ 3: CRC')
+		parser.add_argument('-b', '--ROM_VER', default=1, help='Patchee\'s rom build version')
+		parser.add_argument('-d', '--DEBUG_OPTIONS', default=0, help='Debuging options')
+		parser.add_argument('-i', '--INPUT_DIR', help='Input file Directory')
 		parser.add_argument('-j', '--ENTRY_ADDR', type=str, default='0x00023398', help='The big-endian address of the application\'s entry')
-		parser.add_argument('-p', '--PATCH_VER', type=int, default=2, help='Patchee\'s patch build version')
-		parser.add_argument('-r', '--IMG_TYPE', type=int, default=0, help='Patch Image type. 1: M0(default)/ 2: Kalimba')
-		parser.add_argument('-s', '--ANTI_ROLLBACK_VER', type=int, default=3, help='Image anti-rollback version')
-		parser.add_argument('-t', '--PROD_ID', type=int, default=13, help='Specify production Types/ID')
-		parser.add_argument('-x', '--SERIAL_LOW', type=int, default=0, help='Minor serial number')
-		parser.add_argument('-y', '--SERIAL_HIGH', type=int, default=0, help='Major serial number')
+		parser.add_argument('-p', '--PATCH_VER', default=2, help='Patchee\'s patch build version')
+		parser.add_argument('-r', '--IMG_TYPE', default=0, help='Patch Image type. 0: M0(default)/ 1: Kalimba')
+		parser.add_argument('-s', '--ANTI_ROLLBACK_VER', default=3, help='Image anti-rollback version')
+		parser.add_argument('-t', '--PROD_ID', default=13, help='Specify production Types/ID')
+		parser.add_argument('-w', '--OUTPUT_DIR', help='Working Directory')
+		parser.add_argument('-x', '--SERIAL_LOW', default=0, help='Minor serial number')
+		parser.add_argument('-y', '--SERIAL_HIGH', default=0, help='Major serial number')
 		args = parser.parse_args()
 
-		SIGN_ALGO = args.ALGO
-		IMG_TYPE = args.IMG_TYPE
-		PRODUCT_ID = args.PROD_ID
-		ROM_BUILD_VER = args.ROM_VER
-		PATCH_VER = args.PATCH_VER
-		ANT_RB_VER = args.ANTI_ROLLBACK_VER
-		SERIAL_LOW = args.SERIAL_LOW
-		SERIAL_HIGH = args.SERIAL_HIGH
+		SIGN_ALGO = input_to_int(args.ALGO)
+		IMG_TYPE = input_to_int(args.IMG_TYPE)
+		PRODUCT_ID = input_to_int(args.PROD_ID)
+		ROM_BUILD_VER = input_to_int(args.ROM_VER)
+		PATCH_VER = input_to_int(args.PATCH_VER)
+		ANT_RB_VER = input_to_int(args.ANTI_ROLLBACK_VER)
+		SERIAL_LOW = input_to_int(args.SERIAL_LOW)
+		SERIAL_HIGH = input_to_int(args.SERIAL_HIGH)
 		ENTRY_ADDR = args.ENTRY_ADDR
-		DEBUG_OPTIONS = args.DEBUG_OPTIONS
+		DEBUG_OPTIONS = input_to_int(args.DEBUG_OPTIONS)
+		if args.OUTPUT_DIR is None:
+			DIR_OUT += 'SCAQBAF/rampatch/'
+		else:
+			if args.OUTPUT_DIR[-1] != '/':
+				args.OUTPUT_DIR += '/'
+			if args.OUTPUT_DIR[0] != '.':
+				DIR_OUT += args.OUTPUT_DIR
+			else:
+				DIR_OUT = args.OUTPUT_DIR
+		if args.INPUT_DIR is None:
+			DIR_IN = './'
+		else:
+			if args.INPUT_DIR[-1] != '/':
+				args.INPUT_DIR += '/'
+			if args.INPUT_DIR[0] != '.':
+				DIR_IN += args.INPUT_DIR
+			else:
+				DIR_IN = args.INPUT_DIR
 		
 	else:
 		from optparse import OptionParser
 		print "using OptionParser"
 		parser = OptionParser(description=desc)
-		parser.add_option('-a', '--ALGO', type='int', default=-1, help='Signing algorithm. 0:SHA256/ 1:ECDSA_P-256/ 2:RSA-2048_SHA256/ 3: CRC')
-		parser.add_option('-b', '--ROM_VER', type=int, default=1, help='Patchee\'s rom build version')
-		parser.add_option('-d', '--DEBUG_OPTIONS', type=int, default=0, help='Debuging options')
+		parser.add_option('-a', '--ALGO', default=-1, help='Signing algorithm. 0:SHA256/ 1:ECDSA_P-256/ 2:RSA-2048_SHA256/ 3: CRC')
+		parser.add_option('-b', '--ROM_VER', default=1, help='Patchee\'s rom build version')
+		parser.add_option('-d', '--DEBUG_OPTIONS', default=0, help='Debuging options')
+		parser.add_option('-i', '--INPUT_DIR', help='Input file Directory')
 		parser.add_option('-j', '--ENTRY_ADDR', default='0x00023398', help='The big-endian address of the application\'s entry')
-		parser.add_option('-p', '--PATCH_VER', type=int, default=2, help='Patchee\'s patch build version')
-		parser.add_option('-r', '--IMG_TYPE', type=int, default=0, help='Patch Image type. 1: M0(default)/ 2: Kalimba')
-		parser.add_option('-s', '--ANTI_ROLLBACK_VER', type=int, default=3, help='Image anti-rollback version')
-		parser.add_option('-t', '--PROD_ID', type=int, default=13, help='Specify production Types/ID')
-		parser.add_option('-x', '--SERIAL_LOW', type=int, default=0, help='Minor serial number')
-		parser.add_option('-y', '--SERIAL_HIGH', type=int, default=0, help='Major serial number')
+		parser.add_option('-p', '--PATCH_VER', default=2, help='Patchee\'s patch build version')
+		parser.add_option('-r', '--IMG_TYPE', default=0, help='Patch Image type. 1: M0(default)/ 2: Kalimba')
+		parser.add_option('-s', '--ANTI_ROLLBACK_VER', default=3, help='Image anti-rollback version')
+		parser.add_option('-t', '--PROD_ID', default=13, help='Specify production Types/ID')
+		parser.add_option('-w', '--OUTPUT_DIR', help='Working Directory')
+		parser.add_option('-x', '--SERIAL_LOW', default=0, help='Minor serial number')
+		parser.add_option('-y', '--SERIAL_HIGH', default=0, help='Major serial number')
 		(opt, arg) = parser.parse_args()
 
-		SIGN_ALGO = opt.ALGO
-		IMG_TYPE = opt.IMG_TYPE
-		PRODUCT_ID = opt.PROD_ID
-		ROM_BUILD_VER = opt.ROM_VER
-		PATCH_VER = opt.PATCH_VER
-		ANT_RB_VER = opt.ANTI_ROLLBACK_VER
-		SERIAL_LOW = opt.SERIAL_LOW
-		SERIAL_HIGH = opt.SERIAL_HIGH
+		SIGN_ALGO = input_to_int(opt.ALGO)
+		IMG_TYPE = input_to_int(opt.IMG_TYPE)
+		PRODUCT_ID = input_to_int(opt.PROD_ID)
+		ROM_BUILD_VER = input_to_int(opt.ROM_VER)
+		PATCH_VER = input_to_int(opt.PATCH_VER)
+		ANT_RB_VER = input_to_int(opt.ANTI_ROLLBACK_VER)
+		SERIAL_LOW = input_to_int(opt.SERIAL_LOW)
+		SERIAL_HIGH = input_to_int(opt.SERIAL_HIGH)
 		ENTRY_ADDR = opt.ENTRY_ADDR
-		DEBUG_OPTIONS = opt.DEBUG_OPTIONS
+		DEBUG_OPTIONS = input_to_int(opt.DEBUG_OPTIONS)
+		if opt.OUTPUT_DIR is None:
+			DIR_OUT += 'SCAQBAF/rampatch/'
+		else:
+			if opt.OUTPUT_DIR[-1] != '/':
+				opt.OUTPUT_DIR += '/'
+			if opt.OUTPUT_DIR[0] != '.':
+				DIR_OUT += opt.OUTPUT_DIR
+			else:
+				DIR_OUT = opt.OUTPUT_DIR
+
+		if args.INPUT_DIR is None:
+			DIR_IN += 'SCAQBAF/rampatch/'
+		else:
+			if args.INPUT_DIR[-1] != '/':
+				args.INPUT_DIR += '/'
+			if args.INPUT_DIR[0] != '.':
+				DIR_IN += args.INPUT_DIR
+			else:
+				DIR_IN = args.INPUT_DIR
 	# ++debug++ #
 	print "signing algorithm: %d" %(SIGN_ALGO)
 	print "image type: %d" %(IMG_TYPE)
@@ -133,6 +182,7 @@ def optParser():
 	print "serial high: %d" %(SERIAL_HIGH)
 	print "application entry address: %s" %(ENTRY_ADDR)
 	print "debug options: %d" %(DEBUG_OPTIONS)
+	print "working directory %s" %(DIR_OUT)
 	# --debug-- #
 
 
@@ -181,7 +231,7 @@ def getCRC(bstring):
 	return struct.pack('I', crc32)
 
 def getSignature(bstring):
-	privateKey = RSA.importKey(open(PRI_KEY_FILE).read())
+	privateKey = RSA.importKey(open(DIR_IN+PRI_KEY_FILE).read())
         hash = SHA256.new()
         hash.update(bstring)
         signer = PKCS1_PSS.new(privateKey)
@@ -264,7 +314,7 @@ def TLVGenerator(rampatch_list, output_fname, rsp_config, signed_config):
 	elif signed_config == 2:
 		HASH = ''
 		SIGNATURE = getSignature(rampatch_list)
-		PUB_KEY = getRSAData(PUB_KEY_FILE)
+		PUB_KEY = getRSAData(DIR_IN+PUB_KEY_FILE)
 	elif signed_config == 1:
 		HASH = ''
 		SIGNATURE = ''
@@ -312,6 +362,7 @@ def otp_lt_format(hash_str):
 
 
 def OTPGen(option):
+	global CMM_FOUT
 	sHeader = '; OTP programming for Napier Emulation\n'
 	sHeader += '; OTP_0 shadow register\n'
 	sHeader += '; Bit 2: OTP Programmed, 1(OTP is valid), 0(OTP is invalid)\n'
@@ -319,6 +370,7 @@ def OTPGen(option):
 	sHeader += '; Bit 4: Wipower Fastboot Mode\n'
 	sHeader += '; Bit 5: Boot Patch\n'
 	if option == 0:
+		CMM_FOUT = CMM_FOUT[0:-4] + '_hash' + '.cmm'
 		sbuf = '; Bit 0: OEM_SECURE_BOOT_0_AUTH_EN, 0 (Disable)/ 1 (Enable)\n'
 		sbuf += 'D.S D:(0xC0030000+0xe0) %long 0x00000000\n'
 		sbuf += '\n; Bit 2: HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_DYNAMICDOWNLOAD, 0 (Disable)/ 1 (Enable)\n'
@@ -329,11 +381,12 @@ def OTPGen(option):
 		sbuf += ';HWIO_BT_FUSE_QFPROM_RAW_OEM_SECURE_ROW1_LSB_HASH_INTEGRITY_CHECK_DISABLE_M0_BMSK                                      0x1\n'
 		sbuf += 'D.S D:(0xC0030000+0xe8) %%long %#010x\n\n' %(IMG_TYPE)
 	elif option == 2:
+		CMM_FOUT = CMM_FOUT[0:-4] + '_signed' + '.cmm'
 		sbuf = '; Bit 0: OEM_SECURE_BOOT_0_AUTH_EN, 0 (Disable)/ 1 (Enable)\n'
 		sbuf += 'D.S D:(0xC0030000+0xe0) %%long %#010x\n\n' %(IMG_TYPE)
 		sbuf += '; Hash of public key.\n\n'
 		hash = SHA256.new()
-		hash.update(getRSAData(PUB_KEY_FILE))
+		hash.update(getRSAData(DIR_IN+PUB_KEY_FILE))
 		pb_key_hash = otp_lt_format(hash.hexdigest())
 		sbuf += '; OEM_PK_HASH_M0_ROW_4_LSB\n'
 		sbuf += 'D.S D:(0xC0030000+0xc0) %%long 0x%s\n\n' %(pb_key_hash[0])
@@ -352,6 +405,7 @@ def OTPGen(option):
 		sbuf += '; OEM_PK_HASH_M0_ROW_7_MSB\n'
 		sbuf += 'D.S D:(0xC0030000+0xdc) %%long 0x%s\n\n' %(pb_key_hash[7])
 	elif option == 3:
+		CMM_FOUT = CMM_FOUT[0:-4] + '_crc' + '.cmm'
 		sbuf = '; Bit 0: OEM_SECURE_BOOT_0_AUTH_EN, 0 (Disable)/ 1 (Enable)\n'
 		sbuf += 'D.S D:(0xC0030000+0xe0) %%long %#010x\n\n' %(IMG_TYPE)
 		sbuf += '; Bit 2: HASH_INTEGRITY_CHECK_DISABLE_KALIMBA_DYNAMICDOWNLOAD, 0 (Disable)/ 1 (Enable)\n'
@@ -378,8 +432,8 @@ def OTPGen(option):
         sbuf += '; A_BT_FUSE_QFPROM_RAW_TOP_ROW5_MSB : 0xC0030034\n'
         sbuf += 'D.S D:(0xC0030000+0x34) %long 0x0000ABCD\n\n'
 
-
-	with open(CMM_FOUT, "w") as fout:
+	with open(DIR_OUT + CMM_FOUT, "w") as fout:
+		CMM_FOUT = "otp_simulation.cmm"
 		fout.write(sHeader)
 		fout.write(sbuf)
 		fout.close()
@@ -388,30 +442,32 @@ def OTPGen(option):
 def main():
 	global TLV_LEN, TOTAL_LEN, ENTRY_ADDR, PATCH_LEN, PUB_KEY, CRC32, SIGNATURE
 	try:
-		with open(BIN_FIN, "r+b") as fin:
+		with open(DIR_IN+BIN_FIN, "r+b") as fin:
 			rampatch = fin.read()
 			fin.close()
 			if SIGN_ALGO == -1:
-				TLVGenerator(rampatch, CRC_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 3)
-				TLVGenerator(rampatch, CRC_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 3)
+				TLVGenerator(rampatch, DIR_OUT + CRC_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 3)
+				TLVGenerator(rampatch, DIR_OUT + CRC_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 3)
+				OTPGen(3)
 
-				TLVGenerator(rampatch, SIGNED_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 2)
-				TLVGenerator(rampatch, SIGNED_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 2)
+				TLVGenerator(rampatch, DIR_OUT + SIGNED_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 2)
+				TLVGenerator(rampatch, DIR_OUT + SIGNED_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 2)
+				OTPGen(2)
 
-				TLVGenerator(rampatch, HASH_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 0)
-				TLVGenerator(rampatch, HASH_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 0)
-				#OTPGen(-1)
+				TLVGenerator(rampatch, DIR_OUT + HASH_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 0)
+				TLVGenerator(rampatch, DIR_OUT + HASH_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 0)
+				OTPGen(0)
 			elif SIGN_ALGO == 0:
-				TLVGenerator(rampatch, HASH_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 0)
-				TLVGenerator(rampatch, HASH_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 0)
+				TLVGenerator(rampatch, DIR_OUT + HASH_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 0)
+				TLVGenerator(rampatch, DIR_OUT + HASH_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 0)
 				OTPGen(0)
 			elif SIGN_ALGO == 2:
-				TLVGenerator(rampatch, SIGNED_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 2)
-				TLVGenerator(rampatch, SIGNED_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 2)
+				TLVGenerator(rampatch, DIR_OUT + SIGNED_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 2)
+				TLVGenerator(rampatch, DIR_OUT + SIGNED_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 2)
 				OTPGen(2)
 			elif SIGN_ALGO == 3:
-				TLVGenerator(rampatch, CRC_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 3)
-				TLVGenerator(rampatch, CRC_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 3)
+				TLVGenerator(rampatch, DIR_OUT + CRC_FOUT, TLV_RSP_CFG_ACK_CC_ACK_VSE, 3)
+				TLVGenerator(rampatch, DIR_OUT + CRC_OPT_FOUT, TLV_RSP_CFG_NO_CC_NO_VSE, 3)
 				OTPGen(3)
 				
 
